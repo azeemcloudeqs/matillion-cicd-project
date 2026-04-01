@@ -1,0 +1,57 @@
+type: "transformation"
+version: "1.0"
+pipeline:
+  components:
+    SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG:
+      type: "table-input"
+      parameters:
+        componentName: "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG"
+        database: "TEST_AZEEM"
+        schema: "BRONZE"
+        targetTable: "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG"
+        columnNames:
+        - "C_ID"
+        - "NAME"
+        - "EMAIL"
+        - "CITY"
+        - "UPDATED_AT"
+        timeOffset:
+    SCD_TYPE_2_SILVER_CUSTOMERS_CLEAN:
+      type: "table-output"
+      sources:
+      - "SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG"
+      parameters:
+        componentName: "SCD_TYPE_2_SILVER_CUSTOMERS_CLEAN"
+        warehouse: "[Environment Default]"
+        database: "TEST_AZEEM"
+        schema: "SILVER"
+        targetTable: "SCD_TYPE_2_SILVER_CUSTOMERS_CLEAN"
+        fixDataTypeMismatches: "No"
+        columnMapping:
+        - - "C_ID"
+          - "C_ID"
+        - - "NAME"
+          - "NAME"
+        - - "EMAIL"
+          - "EMAIL"
+        - - "CITY"
+          - "CITY"
+        - - "UPDATED_AT"
+          - "UPDATED_AT"
+        orderBy:
+        outputMode: "Truncate"
+      postProcessing:
+        updateOutputMessage:
+        updateScalarVariables:
+design:
+  components:
+    SCD_TYPE_2_BRONZE_CUSTOMERS_RAW_STG:
+      position:
+        x: -310
+        "y": 0
+      tempMetlId: 1
+    SCD_TYPE_2_SILVER_CUSTOMERS_CLEAN:
+      position:
+        x: -150
+        "y": 0
+      tempMetlId: 2

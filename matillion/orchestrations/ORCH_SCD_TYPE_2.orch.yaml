@@ -1,0 +1,116 @@
+type: "orchestration"
+version: "1.0"
+pipeline:
+  components:
+    Start:
+      type: "start"
+      transitions:
+        unconditional:
+        - "TJ_LOAD_SILVER"
+      parameters:
+        componentName: "Start"
+    SQL Script:
+      type: "sql-executor"
+      transitions:
+        success:
+        - "End Success"
+        failure:
+        - "End Failure"
+      parameters:
+        componentName: "SQL Script"
+        scriptLocation: "Component"
+        declareSqlVariables: "Include selected"
+        variablesToInclude:
+        enableVariableResolution: "No"
+        sqlScript: "-- 1) Insert NEW customers\r\nINSERT INTO TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_DIM_CUSTOMERS\r\
+          \n(\r\n    customer_sk,c_id,name,email,city,\r\n    effective_from,effective_to,is_current,is_deleted\r\
+          \n)\r\nSELECT\r\n    TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_SEQ_CUSTOMER_SK.NEXTVAL,\r\
+          \n    s.c_id,s.name,s.email,s.city,\r\n    CURRENT_TIMESTAMP(),\r\n    TO_TIMESTAMP('9999-12-31\
+          \ 23:59:59'),\r\n    TRUE,FALSE\r\nFROM TEST_AZEEM.SILVER.SCD_TYPE_2_SILVER_CUSTOMERS_CLEAN\
+          \ s\r\nLEFT JOIN TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_DIM_CUSTOMERS g\r\n   \
+          \ ON s.c_id = g.c_id\r\n   AND g.is_current = TRUE\r\nWHERE g.c_id IS NULL;\r\
+          \n\r\n\r\n-- 2) Expire CHANGED rows\r\nUPDATE TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_DIM_CUSTOMERS\
+          \ g\r\nSET effective_to = CURRENT_TIMESTAMP(),\r\n    is_current = FALSE\r\
+          \nFROM TEST_AZEEM.SILVER.SCD_TYPE_2_SILVER_CUSTOMERS_CLEAN s\r\nWHERE g.c_id\
+          \ = s.c_id\r\n  AND g.is_current = TRUE\r\n  AND g.is_deleted = FALSE\r\n\
+          \  AND (\r\n        COALESCE(g.email,'') <> COALESCE(s.email,'')\r\n   \
+          \  OR COALESCE(g.city,'')  <> COALESCE(s.city,'')\r\n  );\r\n\r\n\r\n--\
+          \ 3) Insert NEW VERSION\r\nINSERT INTO TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_DIM_CUSTOMERS\r\
+          \n(\r\n    customer_sk,c_id,name,email,city,\r\n    effective_from,effective_to,is_current,is_deleted\r\
+          \n)\r\nSELECT\r\n    TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_SEQ_CUSTOMER_SK.NEXTVAL,\r\
+          \n    s.c_id,s.name,s.email,s.city,\r\n    CURRENT_TIMESTAMP(),\r\n    TO_TIMESTAMP('9999-12-31\
+          \ 23:59:59'),\r\n    TRUE,FALSE\r\nFROM TEST_AZEEM.SILVER.SCD_TYPE_2_SILVER_CUSTOMERS_CLEAN\
+          \ s\r\nJOIN (\r\n    SELECT c_id\r\n    FROM TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_DIM_CUSTOMERS\r\
+          \n    WHERE is_current = FALSE\r\n      AND effective_to >= DATEADD(second,-10,CURRENT_TIMESTAMP())\r\
+          \n) x ON s.c_id = x.c_id;\r\n\r\n\r\n-- 4) Expire DELETED rows\r\nUPDATE\
+          \ TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_DIM_CUSTOMERS g\r\nSET effective_to =\
+          \ CURRENT_TIMESTAMP(),\r\n    is_current = FALSE\r\nWHERE g.is_current =\
+          \ TRUE\r\n  AND g.is_deleted = FALSE\r\n  AND NOT EXISTS (\r\n      SELECT\
+          \ 1\r\n      FROM TEST_AZEEM.SILVER.SCD_TYPE_2_SILVER_CUSTOMERS_CLEAN s\r\
+          \n      WHERE s.c_id = g.c_id\r\n  );\r\n\r\n\r\n-- 5) Insert DELETED versions\r\
+          \nINSERT INTO TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_DIM_CUSTOMERS\r\n(\r\n   \
+          \ customer_sk,c_id,name,email,city,\r\n    effective_from,effective_to,is_current,is_deleted\r\
+          \n)\r\nSELECT\r\n    TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_SEQ_CUSTOMER_SK.NEXTVAL,\r\
+          \n    g.c_id,g.name,g.email,g.city,\r\n    CURRENT_TIMESTAMP(),\r\n    TO_TIMESTAMP('9999-12-31\
+          \ 23:59:59'),\r\n    TRUE,TRUE\r\nFROM TEST_AZEEM.GOLD.SCD_TYPE_2_GOLD_DIM_CUSTOMERS\
+          \ g\r\nWHERE g.is_current = FALSE\r\n  AND g.is_deleted = FALSE\r\n  AND\
+          \ g.effective_to >= DATEADD(second,-10,CURRENT_TIMESTAMP())\r\n  AND NOT\
+          \ EXISTS (\r\n      SELECT 1\r\n      FROM TEST_AZEEM.SILVER.SCD_TYPE_2_SILVER_CUSTOMERS_CLEAN\
+          \ s\r\n      WHERE s.c_id = g.c_id\r\n  );"
+      postProcessing:
+        updateOutputMessage:
+        updateScalarVariables:
+    End Success:
+      type: "end-success"
+      parameters:
+        componentName: "End Success"
+      postProcessing:
+        updateOutputMessage:
+        updateScalarVariables:
+    End Failure:
+      type: "end-failure"
+      parameters:
+        componentName: "End Failure"
+      postProcessing:
+        updateOutputMessage:
+        updateScalarVariables:
+    TJ_LOAD_SILVER:
+      type: "run-transformation"
+      transitions:
+        success:
+        - "SQL Script"
+      parameters:
+        componentName: "TJ_LOAD_SILVER"
+        transformationJob: "Azeem_TRAIL/SCD_type_2_SQL_SCRIPT/TJ_LOAD_SILVER.tran.yaml"
+        setScalarVariables:
+        setGridVariables:
+      postProcessing:
+        updateOutputMessage:
+        updateScalarVariables:
+design:
+  components:
+    Start:
+      position:
+        x: 0
+        "y": 0
+      tempMetlId: 1
+    SQL Script:
+      position:
+        x: 320
+        "y": 0
+      tempMetlId: 3
+    End Success:
+      position:
+        x: 470
+        "y": -100
+      tempMetlId: 4
+    End Failure:
+      position:
+        x: 480
+        "y": 20
+      tempMetlId: 5
+    TJ_LOAD_SILVER:
+      position:
+        x: 160
+        "y": 0
+      tempMetlId: 2
