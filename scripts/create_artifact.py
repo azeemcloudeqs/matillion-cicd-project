@@ -3,22 +3,22 @@ import shutil
 import json
 from datetime import datetime
 
-# 🔹 Get GitHub environment variables
+# Get GitHub environment variables
 commit_id = os.getenv("GITHUB_SHA", "local_commit")
 author = os.getenv("GITHUB_ACTOR", "unknown_user")
 branch = os.getenv("GITHUB_REF_NAME", "local")
 
-# 🔹 Artifact naming
+# Artifact naming
 artifact_name = f"v_{commit_id}"
 artifact_dir = os.path.join("artifacts", artifact_name)
 
-# 🔹 Create artifact directory
+# Create artifact directory
 os.makedirs(artifact_dir, exist_ok=True)
 
 
 folders_to_include = [
-    "matillion",   # your pipelines (IMPORTANT)
-    "scripts"      # optional (only if needed for deploy)
+    "matillion",   
+    "scripts"      
 ]
 
 for folder in folders_to_include:
