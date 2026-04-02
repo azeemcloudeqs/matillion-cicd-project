@@ -1,61 +1,72 @@
 import os
-import shutil
-import json
+import requests
 from datetime import datetime
 
-# Get GitHub environment variables
-commit_id = os.getenv("GITHUB_SHA", "local_commit")
-author = os.getenv("GITHUB_ACTOR", "unknown_user")
-branch = os.getenv("GITHUB_REF_NAME", "local")
 
-# Artifact naming
-artifact_name = f"v_{commit_id}"
-artifact_dir = os.path.join("artifacts", artifact_name)
-
-# Create artifact directory
-os.makedirs(artifact_dir, exist_ok=True)
+CLIENT_ID = "2ea22e3a-29a7-486c-bf0b-5d94aca51ac0"
+CLIENT_SECRET = "XALRXYRfCPsz9bSmcJwppAPNLSdAbSOc"
+PROJECT_ID = "4c84dfc3-59f9-46cb-ab74-140dc213f2e2"
+ENVIRONMENT_NAME = "dev"
 
 
-folders_to_include = [
-    "matillion",   
-    "scripts"      
-]
+# Metadata
 
-for folder in folders_to_include:
-    if os.path.exists(folder):
-        shutil.copytree(
-            folder,
-            os.path.join(artifact_dir, folder),
-            dirs_exist_ok=True
-        )
-    else:
-        print(f" Folder not found, skipping: {folder}")
+commit_id = os.getenv("COMMIT_ID")
+version_name = f"v_{commit_id}"
+
+print("Creating Artifact:", version_name)
 
 
+# TOKEN
 
-files_to_include = [
-    "README.md"
-]
+token_url = "https://id.core.matillion.com/oauth/dpc/token"
 
-for file in files_to_include:
-    if os.path.exists(file):
-        shutil.copy(file, artifact_dir)
+token_res = requests.post(
+    token_url,
+    data={
+        "grant_type": "client_credentials",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET
+    },
+    headers={"Content-Type": "application/x-www-form-urlencoded"}
+)
 
+if token_res.status_code != 200:
+    raise Exception("Token Error: " + token_res.text)
 
+access_token = token_res.json()["access_token"]
 
-metadata = {
-    "artifact_name": artifact_name,
-    "commit_id": commit_id,
-    "author": author,
-    "branch": branch,
-    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    "description": "Matillion CI/CD Artifact"
+print("✅ Token Generated")
+
+# CREATE ARTIFACT
+
+artifact_url = f"https://us1.api.matillion.com/dpc/v1/projects/{PROJECT_ID}/artifacts"
+
+headers = {
+    "Authorization": f"Bearer {access_token}"
 }
 
-with open(os.path.join(artifact_dir, "metadata.json"), "w") as f:
-    json.dump(metadata, f, indent=4)
+files = {
+    "file": ("artifact.zip", open("artifact.zip", "rb"))
+}
 
+data = {
+    "environmentName": ENVIRONMENT_NAME,
+    "branch": BRANCH,
+    "versionName": version_name
+}
 
-print(f" Artifact created successfully")
-print(f" Location: {artifact_dir}")
-print(f" Version: {artifact_name}")
+response = requests.post(
+    artifact_url,
+    headers=headers,
+    files=files,
+    data=data
+)
+
+print("Status Code:", response.status_code)
+print("Response:", response.text)
+
+if response.status_code not in [200, 201]:
+    raise Exception("Artifact creation failed")
+
+print("Artifact Created Successfully:", version_name)
