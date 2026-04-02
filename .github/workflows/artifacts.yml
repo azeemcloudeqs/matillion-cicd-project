@@ -1,42 +1,31 @@
-name: Matillion Artifact Pipeline
+name: Matillion CI/CD Pipeline
 
 on:
-  push:
+  pull_request:
     branches:
-      - dev
-    paths:
-      - 'matillion/**'
+      - main
 
 jobs:
-  create-artifact:
+  build-artifact:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Extract Metadata
-      - name: Extract Metadata
-        run: |
-          echo "COMMIT_ID=${GITHUB_SHA}" >> $GITHUB_ENV
-          echo "USERNAME=${GITHUB_ACTOR}" >> $GITHUB_ENV
-          echo "USER_EMAIL=$(git log -1 --pretty=format:'%ae')" >> $GITHUB_ENV
-
-      # 3. Setup Python
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: '3.10'
 
-      # 4. Install Requests
       - name: Install Dependencies
-        run: pip install requests
+        run: pip install --upgrade pip
 
-      # 5. Run Python Script
-      - name: Run Artifact Script
-        env:
-          COMMIT_ID: ${{ env.COMMIT_ID }}
-          USERNAME: ${{ env.USERNAME }}
-          USER_EMAIL: ${{ env.USER_EMAIL }}
+      - name: Create Artifact
         run: python scripts/create_artifact.py
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: matillion-artifact
+          path: artifacts/
